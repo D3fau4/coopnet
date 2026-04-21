@@ -74,6 +74,9 @@ float clock_elapsed(void) {
 }
 
 std::string getExecutablePath() {
+#ifdef __SWITCH__
+    return "";
+#else
     char path[0xFF];
 #if defined(_WIN32)
     if (GetModuleFileNameA(nullptr, path, MAX_PATH) != 0) {
@@ -92,6 +95,7 @@ std::string getExecutablePath() {
     }
 #endif
     return "";
+#endif
 }
 
 static std::string readFileData(const std::string &filepath) {
