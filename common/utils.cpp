@@ -6,7 +6,9 @@
 #include <string>
 #include <ctime>
 #include <fstream>
+#ifndef __SWITCH__
 #include <filesystem>
+#endif
 #include "socket.hpp"
 
 #if defined(__APPLE__)
@@ -14,14 +16,28 @@
 #include <mach-o/dyld.h>
 #endif
 
-// Convert a domain name to an in_addr using gethostbyname
+// Convert a domain name to an in_addr using gethostbyname / getaddrinfo
 in_addr_t GetAddrFromDomain(const std::string& domain) {
+#ifdef __SWITCH__
+    // gethostbyname is hidden behind __BSD_VISIBLE when <switch.h> is included;
+    // use getaddrinfo which is always declared in libnx netdb.h
+    struct addrinfo hints = {}, *res = nullptr;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    in_addr_t addr = inet_addr("127.0.0.1");
+    if (getaddrinfo(domain.c_str(), nullptr, &hints, &res) == 0 && res) {
+        addr = ((struct sockaddr_in*)res->ai_addr)->sin_addr.s_addr;
+        freeaddrinfo(res);
+    }
+    return addr;
+#else
     struct hostent* he = gethostbyname(domain.c_str());
     if (he == nullptr) {
         he = gethostbyname("127.0.0.1");
     }
     auto addr_list = reinterpret_cast<in_addr**>(he->h_addr_list);
     return addr_list[0]->s_addr;
+#endif
 }
 
 static void _clock_gettime(struct timespec* clock_time) {

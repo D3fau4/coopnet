@@ -1,0 +1,78 @@
+#-----------------------------------------------------------------------
+# CoopNet - Nintendo Switch static library build
+# Requires devkitPro with libnx installed
+#
+# Usage:
+#   make -f Makefile.switch
+#   make -f Makefile.switch LOGGING=1
+#
+# Output: libcoopnet.a  (link into your NRO with -lcoopnet)
+#-----------------------------------------------------------------------
+
+LOGGING ?= 0
+
+ifeq ($(strip $(DEVKITPRO)),)
+  $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
+endif
+
+#-----------------------------------------------------------------------
+# Toolchain (devkitA64)
+#-----------------------------------------------------------------------
+PREFIX   := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
+CXX      := $(PREFIX)g++
+AR       := $(PREFIX)ar
+
+#-----------------------------------------------------------------------
+# Architecture flags matching devkitPro Switch target
+#-----------------------------------------------------------------------
+ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft \
+            -fPIC -ffunction-sections -fdata-sections
+
+CXXFLAGS := -g -Wall -Werror -Wno-unused-function -Wno-nonnull-compare \
+            -O2 -std=c++17 -fexceptions \
+            $(ARCH) \
+            -D__SWITCH__ -DJUICE_STATIC
+
+ifeq ($(LOGGING),1)
+  CXXFLAGS += -DLOGGING
+endif
+
+#-----------------------------------------------------------------------
+# Include paths
+#-----------------------------------------------------------------------
+INCLUDES := -Icommon \
+            -Ilib/include \
+            -I$(DEVKITPRO)/libnx/include \
+            -I$(DEVKITPRO)/portlibs/switch/include
+
+#-----------------------------------------------------------------------
+# Sources and objects (client lib only - server not relevant on Switch)
+#-----------------------------------------------------------------------
+TARGET    := libcoopnet.a
+BUILD     := build_switch
+LIB_DIR   := lib/switch
+
+COMMON_SRC := $(wildcard common/*.cpp)
+COMMON_OBJ := $(patsubst common/%.cpp, $(BUILD)/%.o, $(COMMON_SRC))
+
+#-----------------------------------------------------------------------
+# Build rules
+#-----------------------------------------------------------------------
+.PHONY: all clean
+
+all: $(BUILD) $(TARGET)
+
+$(TARGET): $(COMMON_OBJ)
+	@echo "  AR   $@"
+	$(AR) -rcs $@ $^
+	@echo "Built $(TARGET) - link with: -L. -lcoopnet -L$(LIB_DIR) -ljuice-static -lnx"
+
+$(BUILD)/%.o: common/%.cpp
+	@echo "  CXX  $<"
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+$(BUILD):
+	mkdir -p $@
+
+clean:
+	rm -rf $(BUILD) $(TARGET)

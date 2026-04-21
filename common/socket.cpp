@@ -121,6 +121,81 @@ uint64_t SocketGetInfoBits(int aSocket) {
     info = SocketAddHash(info);
     return info;
 }
+#elif defined(__SWITCH__)
+
+// Nintendo Switch (libnx) BSD socket implementation
+
+static bool sSwitchSocketInitialized = false;
+
+int SocketInitialize(int aAf, int aType, int aProtocol) {
+    if (!sSwitchSocketInitialized) {
+        // Initialize the lwIP BSD socket service provided by libnx
+        socketInitializeDefault();
+        sSwitchSocketInitialized = true;
+    }
+    SOCKET_RESET_ERROR();
+    int sock = socket(aAf, aType, aProtocol);
+    if (sock == -1) {
+        LOG_ERROR("socket creation failed with error %d", SOCKET_LAST_ERROR);
+    }
+    return sock;
+}
+
+int SocketClose(int aSocket) {
+    return close(aSocket);
+}
+
+void SocketSetOptions(int aSocket) {
+    // set socket to non-blocking mode
+    int flags = fcntl(aSocket, F_GETFL, 0);
+    SOCKET_RESET_ERROR();
+    int rc = fcntl(aSocket, F_SETFL, ((unsigned int)flags) | O_NONBLOCK);
+    if (rc == -1) {
+        LOG_ERROR("failed to set to non-blocking: %d", SOCKET_LAST_ERROR);
+    }
+
+    // set socket to keep-alive mode
+    SOCKET_RESET_ERROR();
+    int optval = 1;
+    if (setsockopt(aSocket, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
+        LOG_ERROR("failed to set to keep-alive mode: %d", SOCKET_LAST_ERROR);
+    }
+
+    // set socket to dont-linger
+    SOCKET_RESET_ERROR();
+    struct linger lingerStruct = { 1, 0 };
+    if (setsockopt(aSocket, SOL_SOCKET, SO_LINGER, &lingerStruct, sizeof(lingerStruct)) < 0) {
+        LOG_ERROR("failed to set to dont-linger mode: %d", SOCKET_LAST_ERROR);
+    }
+}
+
+void SocketLimitBuffer(int aSocket, int64_t* amount) {
+    SOCKET_RESET_ERROR();
+    int bufferLength = 0;
+    if (ioctl(aSocket, FIONREAD, &bufferLength) == -1) {
+        LOG_ERROR("failed to retrieve buffer size: %d", SOCKET_LAST_ERROR);
+        return;
+    }
+    if (*amount > bufferLength) {
+        *amount = bufferLength;
+    }
+}
+
+uint64_t SocketGetInfoBits(int aSocket) {
+    // Use the local IP address bound to the connected socket as a
+    // device-unique seed (avoids nifm service dependency)
+    struct sockaddr_in localAddr = { 0 };
+    socklen_t addrLen = sizeof(localAddr);
+    uint64_t info = SOCKET_DEFAULT_INFO;
+
+    if (getsockname(aSocket, (struct sockaddr*)&localAddr, &addrLen) == 0) {
+        info += (uint64_t)localAddr.sin_addr.s_addr;
+    }
+
+    info = SocketAddHash(info);
+    return info;
+}
+
 #else
 
 #include <sys/ioctl.h>
