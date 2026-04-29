@@ -123,11 +123,21 @@ uint64_t SocketGetInfoBits(int aSocket) {
 }
 #else
 
-#include <sys/ioctl.h>
+#ifdef __SWITCH__
+static bool sSwitchSocketInitialized = false;
+#else
 #include <net/if.h>
 #include <ifaddrs.h>
+#endif
+#include <sys/ioctl.h>
 
 int SocketInitialize(int aAf, int aType, int aProtocol) {
+#ifdef __SWITCH__
+    if (!sSwitchSocketInitialized) {
+        socketInitializeDefault();
+        sSwitchSocketInitialized = true;
+    }
+#endif
     return socket(aAf, aType, aProtocol);
 }
 
@@ -172,6 +182,14 @@ void SocketLimitBuffer(int aSocket, int64_t* amount) {
 }
 
 uint64_t SocketGetInfoBits(int aSocket) {
+#ifdef __SWITCH__
+    struct sockaddr_in localAddr = {};
+    socklen_t addrLen = sizeof(localAddr);
+    uint64_t info = SOCKET_DEFAULT_INFO;
+    if (getsockname(aSocket, (struct sockaddr*)&localAddr, &addrLen) == 0)
+        info += (uint64_t)localAddr.sin_addr.s_addr;
+    return SocketAddHash(info);
+#else
     struct ifaddrs* ifaddr = NULL;
     struct ifaddrs* ifa = NULL;
     uint64_t info = SOCKET_DEFAULT_INFO;
@@ -217,6 +235,7 @@ uint64_t SocketGetInfoBits(int aSocket) {
 
     info = SocketAddHash(info);
     return info;
+#endif
 }
 
 #endif

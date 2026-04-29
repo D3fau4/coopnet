@@ -18,6 +18,11 @@
 
 #else
 
+#ifdef __SWITCH__
+#include <switch.h>
+typedef uint32_t in_addr_t;
+#endif
+
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -36,6 +41,10 @@
 
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
+#endif
+
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
 #endif
 
 uint64_t SocketAddHash(uint64_t info);

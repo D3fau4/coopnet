@@ -5,11 +5,13 @@
 OSX_INTEL ?= 0
 OSX_ARM ?= 0
 OSX_BUILD ?= 0
+SWITCH ?= 0
 LOGGING ?= 0
 
 #################
 
 CXX = g++
+AR = ar
 CXXFLAGS = -Wall -Werror -Wno-unused-function -std=c++11 -fPIC -DJUICE_STATIC -g
 INCLUDES = -Icommon -Ilib/include
 LDFLAGS = -pthread
@@ -58,6 +60,26 @@ else
   endif
 endif
 
+ifeq ($(SWITCH),1)
+  ifeq ($(strip $(DEVKITPRO)),)
+    $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
+  endif
+  PREFIX   := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
+  CXX      := $(PREFIX)g++
+  AR       := $(PREFIX)ar
+  CXXFLAGS  = -g -Wall -Werror -Wno-unused-function -Wno-nonnull-compare \
+              -O2 -std=c++17 -fexceptions \
+              -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft \
+              -fPIC -ffunction-sections -fdata-sections \
+              -D__SWITCH__ -DJUICE_STATIC
+  INCLUDES  = -Icommon -Ilib/include \
+              -I$(DEVKITPRO)/libnx/include \
+              -I$(DEVKITPRO)/portlibs/switch/include
+  LIB_DIR  := lib/switch
+  LDFLAGS   =
+  all: lib
+endif
+
 ifeq ($(LOGGING),1)
   CXXFLAGS += -DLOGGING
 endif
@@ -73,7 +95,7 @@ server: $(SERVER_OBJ) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -L$(LIB_DIR) $(LDFLAGS) -o $(BIN_DIR)/$@ $(SERVER_OBJ) $(LIBS) $(SERVER_LIBS)
 
 lib: $(CLIENT_OBJ) | $(BIN_DIR)
-	ar rcs $(BIN_DIR)/libcoopnet.a $(COMMON_OBJ)
+	$(AR) rcs $(BIN_DIR)/libcoopnet.a $(COMMON_OBJ)
 
 dynlib: $(CLIENT_OBJ) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -L$(LIB_DIR) $(LDFLAGS) -shared -o $(BIN_DIR)/$(DYNLIB_NAME) $(COMMON_OBJ) $(LIBS)
